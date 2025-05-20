@@ -85,11 +85,11 @@ contract Project is Ownable, ReentrancyGuard {
             provider: msg.sender,
             isQuantumResistant: isQuantumResistant
         });
-        
+
         if (!_dataKeyExists(dataKey)) {
             dataKeys.push(dataKey);
         }
-        
+
         emit DataSubmitted(dataKey, msg.sender, block.timestamp);
     }
 
@@ -99,15 +99,15 @@ contract Project is Ownable, ReentrancyGuard {
     function deregisterProvider() external nonReentrant {
         OracleProvider storage provider = providers[msg.sender];
         require(provider.isActive, "Not an active provider");
-        
+
         uint256 amountToWithdraw = provider.stakeAmount;
         provider.isActive = false;
         provider.stakeAmount = 0;
         totalProviders--;
-        
+
         (bool sent, ) = payable(msg.sender).call{value: amountToWithdraw}("");
         require(sent, "Failed to withdraw stake");
-        
+
         emit ProviderDeregistered(msg.sender);
         emit StakeWithdrawn(msg.sender, amountToWithdraw);
     }
@@ -141,5 +141,13 @@ contract Project is Ownable, ReentrancyGuard {
             }
         }
         return false;
+    }
+
+    /**
+     * @dev Get all data keys that have been submitted
+     * @return Array of data keys
+     */
+    function getAllDataKeys() external view returns (bytes32[] memory) {
+        return dataKeys;
     }
 }
