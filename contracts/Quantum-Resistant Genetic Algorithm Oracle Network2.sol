@@ -38,6 +38,9 @@ contract Project is Ownable, ReentrancyGuard {
     event ProviderRegistered(address indexed provider, uint256 stakeAmount);
     event ProviderDeregistered(address indexed provider);
     event StakeWithdrawn(address indexed provider, uint256 amount);
+    event DataUpdated(bytes32 indexed dataKey, address indexed provider, uint256 timestamp);
+    event ReputationSlashed(address indexed provider, uint256 amount);
+    event ReputationBoosted(address indexed provider, uint256 amount);
 
     // Constructor
     constructor(uint256 _minimumStake) Ownable(msg.sender) {
@@ -64,10 +67,6 @@ contract Project is Ownable, ReentrancyGuard {
 
     /**
      * @dev Submit data to the oracle network
-     * @param dataKey The unique identifier for this data point
-     * @param dataHash The hash of the actual data
-     * @param confidence The confidence level of the data (0-100)
-     * @param isQuantumResistant Whether the data is secured with quantum-resistant encryption
      */
     function submitData(
         bytes32 dataKey,
@@ -94,7 +93,31 @@ contract Project is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @dev Deregister as a provider and withdraw staked amount after penalty period
+     * @dev Update previously submitted data by the same provider
+     */
+    function updateData(
+        bytes32 dataKey,
+        bytes32 newDataHash,
+        uint256 newConfidence,
+        bool isQuantumResistant
+    ) external nonReentrant {
+        require(providers[msg.sender].isActive, "Not an active provider");
+        require(dataRegistry[dataKey].provider == msg.sender, "Only original provider can update");
+        require(newConfidence <= 100, "Confidence must be 0-100");
+
+        dataRegistry[dataKey] = GeneticDataPoint({
+            dataHash: newDataHash,
+            timestamp: block.timestamp,
+            confidence: newConfidence,
+            provider: msg.sender,
+            isQuantumResistant: isQuantumResistant
+        });
+
+        emit DataUpdated(dataKey, msg.sender, block.timestamp);
+    }
+
+    /**
+     * @dev Deregister as a provider and withdraw staked amount
      */
     function deregisterProvider() external nonReentrant {
         OracleProvider storage provider = providers[msg.sender];
@@ -114,8 +137,6 @@ contract Project is Ownable, ReentrancyGuard {
 
     /**
      * @dev Retrieve data from the oracle network
-     * @param dataKey The unique identifier for the data point
-     * @return The GeneticDataPoint struct containing the data
      */
     function getData(bytes32 dataKey) external view returns (GeneticDataPoint memory) {
         return dataRegistry[dataKey];
@@ -123,16 +144,38 @@ contract Project is Ownable, ReentrancyGuard {
 
     /**
      * @dev Set minimum stake required to become a provider
-     * @param _minimumStake New minimum stake amount
      */
     function setMinimumStake(uint256 _minimumStake) external onlyOwner {
         minimumStake = _minimumStake;
     }
 
     /**
+     * @dev Slash reputation for a misbehaving provider
+     */
+    function slashReputation(address providerAddress, uint256 amount) external onlyOwner {
+        require(providers[providerAddress].isActive, "Provider not active");
+
+        if (amount >= providers[providerAddress].reputation) {
+            providers[providerAddress].reputation = 0;
+        } else {
+            providers[providerAddress].reputation -= amount;
+        }
+
+        emit ReputationSlashed(providerAddress, amount);
+    }
+
+    /**
+     * @dev Boost reputation for a good-performing provider
+     */
+    function boostReputation(address providerAddress, uint256 amount) external onlyOwner {
+        require(providers[providerAddress].isActive, "Provider not active");
+
+        providers[providerAddress].reputation += amount;
+        emit ReputationBoosted(providerAddress, amount);
+    }
+
+    /**
      * @dev Helper function to check if a data key exists
-     * @param dataKey The key to check
-     * @return True if the key exists, false otherwise
      */
     function _dataKeyExists(bytes32 dataKey) private view returns (bool) {
         for (uint i = 0; i < dataKeys.length; i++) {
@@ -145,7 +188,6 @@ contract Project is Ownable, ReentrancyGuard {
 
     /**
      * @dev Get all data keys that have been submitted
-     * @return Array of data keys
      */
     function getAllDataKeys() external view returns (bytes32[] memory) {
         return dataKeys;
