@@ -31,6 +31,7 @@ contract Project is Ownable, ReentrancyGuard {
     mapping(address => OracleProvider) public providers;
     uint256 public minimumStake;
     uint256 public totalProviders;
+    uint256 public totalStaked;
     bytes32[] public dataKeys;
 
     // Events
@@ -62,6 +63,8 @@ contract Project is Ownable, ReentrancyGuard {
         });
 
         totalProviders++;
+        totalStaked += msg.value;
+
         emit ProviderRegistered(msg.sender, msg.value);
     }
 
@@ -76,6 +79,7 @@ contract Project is Ownable, ReentrancyGuard {
     ) external nonReentrant {
         require(providers[msg.sender].isActive, "Not an active provider");
         require(confidence <= 100, "Confidence must be 0-100");
+        require(!_dataKeyExists(dataKey), "Data key already exists. Use updateData");
 
         dataRegistry[dataKey] = GeneticDataPoint({
             dataHash: dataHash,
@@ -85,9 +89,7 @@ contract Project is Ownable, ReentrancyGuard {
             isQuantumResistant: isQuantumResistant
         });
 
-        if (!_dataKeyExists(dataKey)) {
-            dataKeys.push(dataKey);
-        }
+        dataKeys.push(dataKey);
 
         emit DataSubmitted(dataKey, msg.sender, block.timestamp);
     }
@@ -127,6 +129,7 @@ contract Project is Ownable, ReentrancyGuard {
         provider.isActive = false;
         provider.stakeAmount = 0;
         totalProviders--;
+        totalStaked -= amountToWithdraw;
 
         (bool sent, ) = payable(msg.sender).call{value: amountToWithdraw}("");
         require(sent, "Failed to withdraw stake");
