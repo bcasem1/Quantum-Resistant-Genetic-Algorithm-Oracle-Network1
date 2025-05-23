@@ -34,6 +34,11 @@ contract Project is Ownable, ReentrancyGuard {
     uint256 public totalStaked;
     bytes32[] public dataKeys;
 
+    // Reward-related state
+    uint256 public rewardPool;
+    uint256 public rewardThreshold = 150;
+    uint256 public rewardAmount = 0.01 ether;
+
     // Events
     event DataSubmitted(bytes32 indexed dataKey, address indexed provider, uint256 timestamp);
     event ProviderRegistered(address indexed provider, uint256 stakeAmount);
@@ -42,22 +47,22 @@ contract Project is Ownable, ReentrancyGuard {
     event DataUpdated(bytes32 indexed dataKey, address indexed provider, uint256 timestamp);
     event ReputationSlashed(address indexed provider, uint256 amount);
     event ReputationBoosted(address indexed provider, uint256 amount);
+    event RewardFunded(uint256 amount);
+    event RewardPaid(address indexed provider, uint256 amount);
+    event RewardSettingsUpdated(uint256 newThreshold, uint256 newAmount);
 
     // Constructor
     constructor(uint256 _minimumStake) Ownable(msg.sender) {
         minimumStake = _minimumStake;
     }
 
-    /**
-     * @dev Register as an oracle provider by staking required amount
-     */
     function registerProvider() external payable nonReentrant {
         require(msg.value >= minimumStake, "Insufficient stake amount");
         require(!providers[msg.sender].isActive, "Provider already registered");
 
         providers[msg.sender] = OracleProvider({
             providerAddress: msg.sender,
-            reputation: 100, // Initial reputation
+            reputation: 100,
             stakeAmount: msg.value,
             isActive: true
         });
@@ -68,9 +73,6 @@ contract Project is Ownable, ReentrancyGuard {
         emit ProviderRegistered(msg.sender, msg.value);
     }
 
-    /**
-     * @dev Submit data to the oracle network
-     */
     function submitData(
         bytes32 dataKey,
         bytes32 dataHash,
@@ -92,11 +94,16 @@ contract Project is Ownable, ReentrancyGuard {
         dataKeys.push(dataKey);
 
         emit DataSubmitted(dataKey, msg.sender, block.timestamp);
+
+        // Auto reward logic
+        if (providers[msg.sender].reputation >= rewardThreshold && rewardPool >= rewardAmount) {
+            rewardPool -= rewardAmount;
+            (bool sent, ) = payable(msg.sender).call{value: rewardAmount}("");
+            require(sent, "Reward transfer failed");
+            emit RewardPaid(msg.sender, rewardAmount);
+        }
     }
 
-    /**
-     * @dev Update previously submitted data by the same provider
-     */
     function updateData(
         bytes32 dataKey,
         bytes32 newDataHash,
@@ -118,9 +125,6 @@ contract Project is Ownable, ReentrancyGuard {
         emit DataUpdated(dataKey, msg.sender, block.timestamp);
     }
 
-    /**
-     * @dev Deregister as a provider and withdraw staked amount
-     */
     function deregisterProvider() external nonReentrant {
         OracleProvider storage provider = providers[msg.sender];
         require(provider.isActive, "Not an active provider");
@@ -138,23 +142,14 @@ contract Project is Ownable, ReentrancyGuard {
         emit StakeWithdrawn(msg.sender, amountToWithdraw);
     }
 
-    /**
-     * @dev Retrieve data from the oracle network
-     */
     function getData(bytes32 dataKey) external view returns (GeneticDataPoint memory) {
         return dataRegistry[dataKey];
     }
 
-    /**
-     * @dev Set minimum stake required to become a provider
-     */
     function setMinimumStake(uint256 _minimumStake) external onlyOwner {
         minimumStake = _minimumStake;
     }
 
-    /**
-     * @dev Slash reputation for a misbehaving provider
-     */
     function slashReputation(address providerAddress, uint256 amount) external onlyOwner {
         require(providers[providerAddress].isActive, "Provider not active");
 
@@ -167,9 +162,6 @@ contract Project is Ownable, ReentrancyGuard {
         emit ReputationSlashed(providerAddress, amount);
     }
 
-    /**
-     * @dev Boost reputation for a good-performing provider
-     */
     function boostReputation(address providerAddress, uint256 amount) external onlyOwner {
         require(providers[providerAddress].isActive, "Provider not active");
 
@@ -177,9 +169,6 @@ contract Project is Ownable, ReentrancyGuard {
         emit ReputationBoosted(providerAddress, amount);
     }
 
-    /**
-     * @dev Helper function to check if a data key exists
-     */
     function _dataKeyExists(bytes32 dataKey) private view returns (bool) {
         for (uint i = 0; i < dataKeys.length; i++) {
             if (dataKeys[i] == dataKey) {
@@ -189,10 +178,21 @@ contract Project is Ownable, ReentrancyGuard {
         return false;
     }
 
-    /**
-     * @dev Get all data keys that have been submitted
-     */
     function getAllDataKeys() external view returns (bytes32[] memory) {
         return dataKeys;
+    }
+
+    // New: Fund the reward pool
+    function fundRewardPool() external payable onlyOwner {
+        require(msg.value > 0, "Must send ETH");
+        rewardPool += msg.value;
+        emit RewardFunded(msg.value);
+    }
+
+    // New: Configure reward settings
+    function setRewardSettings(uint256 _threshold, uint256 _amount) external onlyOwner {
+        rewardThreshold = _threshold;
+        rewardAmount = _amount;
+        emit RewardSettingsUpdated(_threshold, _amount);
     }
 }
