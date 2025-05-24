@@ -186,7 +186,7 @@ contract Project is Ownable, ReentrancyGuard {
     function fundRewardPool() external payable onlyOwner {
         require(msg.value > 0, "Must send ETH");
         rewardPool += msg.value;
-        emit RewardFunded(msg.value);
+        emit RewardFunded(msg.value)
     }
 
     // New: Configure reward settings
