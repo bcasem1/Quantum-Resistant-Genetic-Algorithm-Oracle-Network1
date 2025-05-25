@@ -37,8 +37,7 @@ contract Project is Ownable, ReentrancyGuard {
     // Reward-related state
     uint256 public rewardPool;
     uint256 public rewardThreshold = 150;
-    uint256 public rewardAmount = 0.01 ether;
-
+    uint256 public rewardAmount
     // Events
     event DataSubmitted(bytes32 indexed dataKey, address indexed provider, uint256 timestamp);
     event ProviderRegistered(address indexed provider, uint256 stakeAmount);
