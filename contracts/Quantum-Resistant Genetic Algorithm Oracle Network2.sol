@@ -6,7 +6,7 @@ import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
 /**
  * @title Quantum-Resistant Genetic Algorithm Oracle Network
- * @dev A decentralized oracle network that uses quantum-resistant algorithms and genetic optimization
+ * @dev A decentralized oracle network that uses quantum-resistnt algorithms and genetic optimization
  * to provide secure and evolving data feeds to blockchain applications.
  */
 contract Project is Ownable, ReentrancyGuard {
