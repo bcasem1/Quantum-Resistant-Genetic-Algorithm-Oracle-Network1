@@ -6,7 +6,7 @@ import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
 /**
  * @title Quantum-Resistant Genetic Algorithm Oracle Network
- * @dev A decentralized oracle network that uses quantum-resistnt algorithms and genetic optimization
+ * @dev A decentralized oracle network that uses quantum-resistant algorithms and genetic optimization
  * to provide secure and evolving data feeds to blockchain applications.
  */
 contract Project is Ownable, ReentrancyGuard {
@@ -37,7 +37,11 @@ contract Project is Ownable, ReentrancyGuard {
     // Reward-related state
     uint256 public rewardPool;
     uint256 public rewardThreshold = 150;
-    uint256 public rewardAmount
+    uint256 public rewardAmount;
+
+    // Control flags
+    bool public submissionsPaused = false;
+
     // Events
     event DataSubmitted(bytes32 indexed dataKey, address indexed provider, uint256 timestamp);
     event ProviderRegistered(address indexed provider, uint256 stakeAmount);
@@ -49,12 +53,18 @@ contract Project is Ownable, ReentrancyGuard {
     event RewardFunded(uint256 amount);
     event RewardPaid(address indexed provider, uint256 amount);
     event RewardSettingsUpdated(uint256 newThreshold, uint256 newAmount);
+    event SubmissionsPaused();
+    event SubmissionsUnpaused();
+    event ProviderToppedUp(address indexed provider, uint256 amount);
+    event DataDeleted(bytes32 indexed dataKey);
+    event EmergencyWithdrawal(uint256 amount);
 
     // Constructor
     constructor(uint256 _minimumStake) Ownable(msg.sender) {
         minimumStake = _minimumStake;
     }
 
+    // Core Functions
     function registerProvider() external payable nonReentrant {
         require(msg.value >= minimumStake, "Insufficient stake amount");
         require(!providers[msg.sender].isActive, "Provider already registered");
@@ -78,6 +88,7 @@ contract Project is Ownable, ReentrancyGuard {
         uint256 confidence,
         bool isQuantumResistant
     ) external nonReentrant {
+        require(!submissionsPaused, "Submissions are paused");
         require(providers[msg.sender].isActive, "Not an active provider");
         require(confidence <= 100, "Confidence must be 0-100");
         require(!_dataKeyExists(dataKey), "Data key already exists. Use updateData");
@@ -91,10 +102,8 @@ contract Project is Ownable, ReentrancyGuard {
         });
 
         dataKeys.push(dataKey);
-
         emit DataSubmitted(dataKey, msg.sender, block.timestamp);
 
-        // Auto reward logic
         if (providers[msg.sender].reputation >= rewardThreshold && rewardPool >= rewardAmount) {
             rewardPool -= rewardAmount;
             (bool sent, ) = payable(msg.sender).call{value: rewardAmount}("");
@@ -141,33 +150,109 @@ contract Project is Ownable, ReentrancyGuard {
         emit StakeWithdrawn(msg.sender, amountToWithdraw);
     }
 
+    // View Functions
     function getData(bytes32 dataKey) external view returns (GeneticDataPoint memory) {
         return dataRegistry[dataKey];
     }
 
+    function getAllDataKeys() external view returns (bytes32[] memory) {
+        return dataKeys;
+    }
+
+    function getProvider(address providerAddress) external view returns (OracleProvider memory) {
+        return providers[providerAddress];
+    }
+
+    function getActiveProviders() external view returns (address[] memory) {
+        address[] memory activeList = new address[](totalProviders);
+        uint256 index = 0;
+        for (uint i = 0; i < dataKeys.length; i++) {
+            address providerAddr = dataRegistry[dataKeys[i]].provider;
+            if (providers[providerAddr].isActive) {
+                activeList[index++] = providerAddr;
+            }
+        }
+        return activeList;
+    }
+
+    // Admin Functions
     function setMinimumStake(uint256 _minimumStake) external onlyOwner {
         minimumStake = _minimumStake;
     }
 
     function slashReputation(address providerAddress, uint256 amount) external onlyOwner {
         require(providers[providerAddress].isActive, "Provider not active");
-
-        if (amount >= providers[providerAddress].reputation) {
-            providers[providerAddress].reputation = 0;
-        } else {
-            providers[providerAddress].reputation -= amount;
-        }
+        providers[providerAddress].reputation =
+            amount >= providers[providerAddress].reputation
+                ? 0
+                : providers[providerAddress].reputation - amount;
 
         emit ReputationSlashed(providerAddress, amount);
     }
 
     function boostReputation(address providerAddress, uint256 amount) external onlyOwner {
         require(providers[providerAddress].isActive, "Provider not active");
-
         providers[providerAddress].reputation += amount;
         emit ReputationBoosted(providerAddress, amount);
     }
 
+    function fundRewardPool() external payable onlyOwner {
+        require(msg.value > 0, "Must send ETH");
+        rewardPool += msg.value;
+        emit RewardFunded(msg.value);
+    }
+
+    function setRewardSettings(uint256 _threshold, uint256 _amount) external onlyOwner {
+        rewardThreshold = _threshold;
+        rewardAmount = _amount;
+        emit RewardSettingsUpdated(_threshold, _amount);
+    }
+
+    function pauseSubmissions() external onlyOwner {
+        submissionsPaused = true;
+        emit SubmissionsPaused();
+    }
+
+    function unpauseSubmissions() external onlyOwner {
+        submissionsPaused = false;
+        emit SubmissionsUnpaused();
+    }
+
+    function emergencyWithdraw(uint256 amount) external onlyOwner {
+        require(amount <= address(this).balance, "Not enough balance");
+        (bool sent, ) = payable(owner()).call{value: amount}("");
+        require(sent, "Emergency withdrawal failed");
+        emit EmergencyWithdrawal(amount);
+    }
+
+    function deleteData(bytes32 dataKey) external onlyOwner {
+        require(_dataKeyExists(dataKey), "Data key does not exist");
+        delete dataRegistry[dataKey];
+
+        // Remove from array
+        for (uint i = 0; i < dataKeys.length; i++) {
+            if (dataKeys[i] == dataKey) {
+                dataKeys[i] = dataKeys[dataKeys.length - 1];
+                dataKeys.pop();
+                break;
+            }
+        }
+
+        emit DataDeleted(dataKey);
+    }
+
+    // Extra Functionality
+    function topUpStake() external payable nonReentrant {
+        require(providers[msg.sender].isActive, "Not an active provider");
+        require(msg.value > 0, "No ETH sent");
+
+        providers[msg.sender].stakeAmount += msg.value;
+        totalStaked += msg.value;
+
+        emit ProviderToppedUp(msg.sender, msg.value);
+    }
+
+    // Private helper
     function _dataKeyExists(bytes32 dataKey) private view returns (bool) {
         for (uint i = 0; i < dataKeys.length; i++) {
             if (dataKeys[i] == dataKey) {
@@ -177,21 +262,9 @@ contract Project is Ownable, ReentrancyGuard {
         return false;
     }
 
-    function getAllDataKeys() external view returns (bytes32[] memory) {
-        return dataKeys;
-    }
-
-    // New: Fund the reward pool
-    function fundRewardPool() external payable onlyOwner {
-        require(msg.value > 0, "Must send ETH");
+    // Fallback to receive ETH
+    receive() external payable {
         rewardPool += msg.value;
-        emit RewardFunded(msg.value)
-    }
-
-    // New: Configure reward settings
-    function setRewardSettings(uint256 _threshold, uint256 _amount) external onlyOwner {
-        rewardThreshold = _threshold;
-        rewardAmount = _amount;
-        emit RewardSettingsUpdated(_threshold, _amount);
+        emit RewardFunded(msg.value);
     }
 }
