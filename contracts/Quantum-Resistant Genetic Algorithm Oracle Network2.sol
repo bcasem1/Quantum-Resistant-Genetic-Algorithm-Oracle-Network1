@@ -11,7 +11,7 @@ import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
  */
 contract Project is Ownable, ReentrancyGuard {
     // Structures
-    struct GeneticDataPoint {
+    struct GeneticDataPoint 
         bytes32 dataHash;
         uint256 timestamp;
         uint256 confidence;
