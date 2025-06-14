@@ -13,8 +13,7 @@ contract Project is Ownable, ReentrancyGuard {
         uint256 timestamp;
         uint256 confidence;
         address provider;
-        bool isQuantumResistant;
-    }
+        bool isQuantumResis
 
     struct DataVersion {
         bytes32 dataHash;
