@@ -22,12 +22,7 @@ contract Project is Ownable, ReentrancyGuard {
         bool isQuantumResistant;
     }
 
-    struct OracleProvider {
-        address providerAddress;
-        uint256 reputation;
-        uint256 stakeAmount;
-        bool isActive;
-    }
+   
 
     // State variables
     mapping(bytes32 => GeneticDataPoint) public dataRegistry;
