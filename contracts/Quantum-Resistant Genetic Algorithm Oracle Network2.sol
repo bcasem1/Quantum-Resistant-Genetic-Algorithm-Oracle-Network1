@@ -6,14 +6,7 @@ import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 /**
  * @title Quantum-Resistant Genetic Algorithm Oracle Network
  */
-contract Project is Ownable, ReentrancyGuard {
-    // Structures
-    struct GeneticDataPoin
-        bytes32 dataHash
-        uint256 timestamp;
-        uint256 confidence;
-        address provider;
-        bool isQuantumResis
+
 
     struct DataVersion {
         bytes32 dataHash;
