@@ -5,9 +5,6 @@ import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
 /**
  * @title Quantum-Resistant Genetic Algorithm Oracle Network
- */
-
-
     struct DataVersion {
         bytes32 dataHash;
         uint256 timestamp;
