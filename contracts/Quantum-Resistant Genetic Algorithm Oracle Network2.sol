@@ -83,14 +83,7 @@ import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
             reputation: 100,
             stakeAmount: msg.value,
             isActive: true
-        });
-
-        totalProviders++;
-        totalStaked += msg.value;
-        lastActive[msg.sender] = block.timestamp;
-
-        emit ProviderRegistered(msg.sender, msg.value);
-    }
+        })
 
     function submitData(
         bytes32 dataKey,
