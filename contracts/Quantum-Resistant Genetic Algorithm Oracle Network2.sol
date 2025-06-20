@@ -12,14 +12,6 @@ import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
         bool isQuantumResistant;
     }
 
-   
-
-    // State variables
-    mapping(bytes32 => GeneticDataPoint) public dtry;
-    mapping(bytes32 => DataVersion[]) public dataHistory;
-    mapping(address => OracleProvider) public providers;
-    mapping(address => uint256) public lastActive;
-    mapping(address => bool) public blacklisted;
 
     uint256 public minimumStake;
     uint256 public totalProviders;
