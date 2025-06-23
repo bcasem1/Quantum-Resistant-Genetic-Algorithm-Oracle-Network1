@@ -1,10 +1,28 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
+
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
 /**
  * @title Quantum-Resistant Genetic Algorithm Oracle Network
+ */
+contract QuantumOracle is Ownable, ReentrancyGuard {
+    struct OracleProvider {
+        address providerAddress;
+        uint256 reputation;
+        uint256 stakeAmount;
+        bool isActive;
+    }
+
+    struct GeneticDataPoint {
+        bytes32 dataHash;
+        uint256 timestamp;
+        uint256 confidence;
+        address provider;
+        bool isQuantumResistant;
+    }
+
     struct DataVersion {
         bytes32 dataHash;
         uint256 timestamp;
@@ -12,6 +30,12 @@ import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
         bool isQuantumResistant;
     }
 
+    // Mappings and state variables
+    mapping(address => OracleProvider) public providers;
+    mapping(bytes32 => GeneticDataPoint) public dataRegistry;
+    mapping(bytes32 => DataVersion[]) public dataHistory;
+    mapping(address => bool) public blacklisted;
+    mapping(address => uint256) public lastActive;
 
     uint256 public minimumStake;
     uint256 public totalProviders;
@@ -40,8 +64,9 @@ import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
     event SubmissionsUnpaused();
     event ProviderToppedUp(address indexed provider, uint256 amount);
     event DataDeleted(bytes32 indexed dataKey);
-d provider);
+    event ProviderBlacklisted(address indexed provider);
     event ProviderUnblacklisted(address indexed provider);
+
     constructor(uint256 _minimumStake) Ownable(msg.sender) {
         minimumStake = _minimumStake;
     }
@@ -56,7 +81,13 @@ d provider);
             reputation: 100,
             stakeAmount: msg.value,
             isActive: true
-        })
+        });
+
+        totalProviders++;
+        totalStaked += msg.value;
+
+        emit ProviderRegistered(msg.sender, msg.value);
+    }
 
     function submitData(
         bytes32 dataKey,
@@ -148,7 +179,7 @@ d provider);
         emit ProviderToppedUp(msg.sender, msg.value);
     }
 
-    // View
+    // View Functions
     function getData(bytes32 dataKey) external view returns (GeneticDataPoint memory) {
         return dataRegistry[dataKey];
     }
@@ -165,7 +196,7 @@ d provider);
         return dataHistory[dataKey];
     }
 
-    // Admin
+    // Admin Functions
     function setMinimumStake(uint256 _minimumStake) external onlyOwner {
         minimumStake = _minimumStake;
     }
@@ -231,4 +262,30 @@ d provider);
             }
         }
 
-        emit DataDeleted
+        emit DataDeleted(dataKey);
+    }
+
+    function blacklistProvider(address provider) external onlyOwner {
+        blacklisted[provider] = true;
+        emit ProviderBlacklisted(provider);
+    }
+
+    function unblacklistProvider(address provider) external onlyOwner {
+        blacklisted[provider] = false;
+        emit ProviderUnblacklisted(provider);
+    }
+
+    // Utility
+    function _dataKeyExists(bytes32 key) internal view returns (bool) {
+        return dataRegistry[key].timestamp != 0;
+    }
+
+    receive() external payable {
+        rewardPool += msg.value;
+        emit RewardFunded(msg.value);
+    }
+
+    fallback() external payable {
+        rewardPool += msg.value;
+    }
+}
